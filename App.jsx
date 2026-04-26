@@ -12,12 +12,13 @@ import {
 import { deleteCurrentUserAccount, loginUser, logoutUser, signupUser } from './services/authService';
 import { COURSES } from './data/courses';
 import { NOTE_TONES, PAGE_TITLES } from './data/defaults';
-import { LEVEL_TABLE, getLevelInfo } from './data/levels';
 import { PROBLEMS } from './data/problems';
+import { LEVEL_TABLE, getLevelInfo } from './data/levels';
 import { FONT_SIZE_OPTIONS, NAV_ITEMS, PRIORITY_MAP } from './constants/app';
 import { useAuth } from './hooks/useAuth';
 import { useAppPreferences } from './hooks/useAppPreferences';
 import { useLearnFlowData } from './hooks/useLearnFlowData';
+import AdminDashboard from './features/admin/AdminDashboard';
 import CourseDetailDrawer from './features/courses/components/CourseDetailDrawer';
 import CoursesPage from './features/courses/components/CoursesPage';
 import {
@@ -62,6 +63,7 @@ function App() {
     pomodoro,
     settings: remoteSettings,
     catalogCourses,
+    catalogProblems,
     createTaskItem,
     toggleTaskItem,
     deleteTaskItem,
@@ -659,7 +661,7 @@ function App() {
   }
 
   function openProblem(problemId) {
-    const problem = PROBLEMS.find((item) => item.id === problemId);
+    const problem = catalogProblems.find((item) => item.id === problemId);
     if (!problem) return;
     setEditorProblemId(problemId);
     setEditorLang('python');
@@ -740,13 +742,11 @@ function App() {
       };
 
       try {
-        const expGained = accepted ? getExperienceByDifficulty(editorProblem.diff) : 0;
-
         if (accepted) {
           await setProblemStatus(editorProblem.id, 'done');
         }
 
-        await saveSubmission(submission, accepted ? expGained : 0, accepted ? expGained : 0);
+        await saveSubmission(submission, accepted ? 100 : 0);
 
         setOutputHtml(
           accepted
@@ -754,7 +754,7 @@ function App() {
             : '<div><strong>❌ Kết quả chưa đúng</strong></div><div>Hãy kiểm tra lại logic rồi thử lại.</div>',
         );
 
-        showToast(accepted ? `Nộp bài thành công. +${expGained} EXP` : 'Kết quả chưa đúng, hãy thử lại.', accepted ? '🏆' : '❌');
+        showToast(accepted ? 'Nộp bài thành công. +100 XP' : 'Kết quả chưa đúng, hãy thử lại.', accepted ? '🏆' : '❌');
       } catch (error) {
         setOutputHtml('<div><strong>❌ Không thể lưu kết quả lên hệ thống.</strong></div>');
         showToast(error.message || 'Không thể nộp bài.', '⚠️');
@@ -908,10 +908,10 @@ function App() {
     }
 
     const done = solvedProblems;
-    const total = PROBLEMS.length;
-    const easy = PROBLEMS.filter((item) => item.diff === 'easy' && (problemStatuses[item.id] || 'none') === 'done').length;
-    const medium = PROBLEMS.filter((item) => item.diff === 'medium' && (problemStatuses[item.id] || 'none') === 'done').length;
-    const hard = PROBLEMS.filter((item) => item.diff === 'hard' && (problemStatuses[item.id] || 'none') === 'done').length;
+    const total = catalogProblems.length;
+    const easy = catalogProblems.filter((item) => item.diff === 'easy' && (problemStatuses[item.id] || 'none') === 'done').length;
+    const medium = catalogProblems.filter((item) => item.diff === 'medium' && (problemStatuses[item.id] || 'none') === 'done').length;
+    const hard = catalogProblems.filter((item) => item.diff === 'hard' && (problemStatuses[item.id] || 'none') === 'done').length;
     const lessonSignal = Math.min(30, completedLessonsCount * 2);
     const focusSignal = Math.min(20, Math.floor(pomoTotalSec / 3600) * 5);
     const trackSignal = Math.min(10, trackedCourses.length * 2);
@@ -927,7 +927,7 @@ function App() {
       { label: 'Cấu trúc dữ liệu', value: Math.min(100, done * 2 + 20), color: 'var(--sky)' },
     ];
 
-    const suggestions = PROBLEMS.filter((item) => (problemStatuses[item.id] || 'none') !== 'done')
+    const suggestions = catalogProblems.filter((item) => (problemStatuses[item.id] || 'none') !== 'done')
       .slice(0, 3)
       .map((item, index) => ({
         id: item.id,
@@ -953,7 +953,7 @@ function App() {
   }
 
   function showAIHint(type) {
-    const problem = editorProblem || PROBLEMS[0];
+    const problem = editorProblem || catalogProblems[0];
     const contentMap = {
       complexity: {
         title: 'Phân tích độ phức tạp',
@@ -1037,7 +1037,7 @@ function App() {
                 </span>
                 <span>{item.label}</span>
                 {item.badgeType === 'tasks' ? <span className={cx('sidebar-nav__badge')}>{pendingTasks}</span> : null}
-                {item.badgeType === 'problems' ? <span className={cx('sidebar-nav__badge')}>{PROBLEMS.length}</span> : null}
+                {item.badgeType === 'problems' ? <span className={cx('sidebar-nav__badge')}>{catalogProblems.length}</span> : null}
                 {item.badgeType === 'courses' ? <span className={cx('sidebar-nav__badge')}>{activeCourseCount}</span> : null}
               </button>
             ))}
@@ -1157,7 +1157,6 @@ function App() {
                 <StatCard emoji="⏱️" trend={pomoCount ? 'Realtime' : 'Chưa có'} number={formatHoursMinutes(Math.floor(pomoTotalSec / 60))} label="Giờ tập trung" progress={Math.min(100, Math.floor(pomoTotalSec / 60))} color="var(--teal)" tone="teal" />
                 <StatCard emoji="✅" trend="↑ cloud" number={`${completePercentage}%`} label="Tỷ lệ hoàn thành" progress={completePercentage} color="var(--amber)" tone="amber" />
                 <StatCard emoji="🏆" trend="↑ XP" number={score.toLocaleString()} label="Tổng điểm" progress={Math.min(100, levelInfo.pct)} color="var(--sky)" tone="sky" />
-                <StatCard emoji="✨" trend="↑ EXP" number={experience.toLocaleString()} label="Kinh nghiệm" progress={Math.min(100, (experience % 1000) / 10)} color="var(--violet)" tone="violet" />
               </div>
 
               <div className={cx('split-layout', 'split-layout--dashboard')}>
@@ -1602,10 +1601,10 @@ function App() {
               </div>
               <div className={cx('problem-stats')}>
                 <ProblemStat label="Đã giải" value={solvedProblems} />
-                <ProblemStat label="Dễ ✓" value={PROBLEMS.filter((item) => item.diff === 'easy' && (problemStatuses[item.id] || 'none') === 'done').length} />
-                <ProblemStat label="Vừa ✓" value={PROBLEMS.filter((item) => item.diff === 'medium' && (problemStatuses[item.id] || 'none') === 'done').length} />
-                <ProblemStat label="Khó ✓" value={PROBLEMS.filter((item) => item.diff === 'hard' && (problemStatuses[item.id] || 'none') === 'done').length} />
-                <ProblemStat label="Tổng bài" value={PROBLEMS.length} muted />
+                <ProblemStat label="Dễ ✓" value={catalogProblems.filter((item) => item.diff === 'easy' && (problemStatuses[item.id] || 'none') === 'done').length} />
+                <ProblemStat label="Vừa ✓" value={catalogProblems.filter((item) => item.diff === 'medium' && (problemStatuses[item.id] || 'none') === 'done').length} />
+                <ProblemStat label="Khó ✓" value={catalogProblems.filter((item) => item.diff === 'hard' && (problemStatuses[item.id] || 'none') === 'done').length} />
+                <ProblemStat label="Tổng bài" value={catalogProblems.length} muted />
               </div>
               <div className={cx('filter-row')}>
                 {[
@@ -1903,6 +1902,11 @@ function App() {
             </div>
           ) : null}
 
+          
+          {currentPage === 'admin' && ['admin', 'superadmin'].includes(profile?.role) ? (
+            <AdminDashboard catalogCourses={catalogCourses} catalogProblems={catalogProblems} showToast={showToast} />
+          ) : null}
+
           {currentPage === 'settings' ? (
             <div className={cx('page-settings')}>
               <section className={cx('card')}>
@@ -2020,6 +2024,24 @@ function App() {
                   <DataRow title="Phiên bản ứng dụng" desc="LearnFlow Firebase Edition • Bản dựng 2026" action={<span className={cx('badge', 'badge--done')}>Production</span>} />
                 </div>
               </section>
+              {['admin', 'superadmin'].includes(profile?.role) && (
+              <section className={cx('card')}>
+                <div className={cx('card__header')}>
+                  <div className={cx('card__title')}>
+                    <SectionTitle icon="target" label="Quản trị hệ thống" />
+                  </div>
+                </div>
+                <div className={cx('settings-list')}>
+                  <div className={cx('data-row')}>
+                    <div className={cx('data-row__content')}>
+                      <div className={cx('data-row__title')}>Truy cập Admin Dashboard</div>
+                      <div className={cx('data-row__desc')}>Quản lý khóa học, bài tập, và người dùng.</div>
+                    </div>
+                    <button type="button" className={cx('button', 'button--primary')} onClick={() => setCurrentPage('admin')}>Truy cập</button>
+                  </div>
+                </div>
+              </section>
+)}
               <section className={cx('card')}>
                 <div className={cx('card__header')}>
                   <div className={cx('card__title')}>
