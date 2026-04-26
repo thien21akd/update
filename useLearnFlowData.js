@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { COURSE_META, COURSES } from '../data/courses';
+import { COURSE_META, COURSES as DEFAULT_COURSES } from '../data/courses';
+import { PROBLEMS as DEFAULT_PROBLEMS } from '../data/problems';
+import { subscribeValue } from '../services/databaseService';
 import { DEFAULT_NOTIFICATION_SETTINGS, DEFAULT_POMODORO_SETTINGS, EMPTY_ACTIVITY } from '../constants/firebaseDefaults';
 import {
   createCustomCourse,
@@ -39,6 +41,8 @@ const EMPTY_DATA = {
   pomodoro: null,
   settings: null,
   leaderboard: [],
+  globalCourses: null,
+  globalProblems: null,
 };
 
 export function useLearnFlowData(currentUser) {
@@ -50,21 +54,43 @@ export function useLearnFlowData(currentUser) {
   const seededUserRef = useRef('');
 
   useEffect(() => {
-    // Leaderboard là nguồn dữ liệu public, nên tách listener riêng để không phụ thuộc phiên user.
-    const unsubscribe = subscribeToLeaderboard(
+    const unsubscribeLeaderboard = subscribeToLeaderboard(
       (leaderboard) => {
         setState((previous) => ({
           ...previous,
-          data: {
-            ...previous.data,
-            leaderboard,
-          },
+          data: { ...previous.data, leaderboard },
         }));
       },
       () => {},
     );
 
-    return unsubscribe;
+    const unsubscribeCourses = subscribeValue(
+      'courses',
+      (snapshot) => {
+        setState((previous) => ({
+          ...previous,
+          data: { ...previous.data, globalCourses: snapshot.val() },
+        }));
+      },
+      () => {},
+    );
+
+    const unsubscribeProblems = subscribeValue(
+      'problems',
+      (snapshot) => {
+        setState((previous) => ({
+          ...previous,
+          data: { ...previous.data, globalProblems: snapshot.val() },
+        }));
+      },
+      () => {},
+    );
+
+    return () => {
+      unsubscribeLeaderboard();
+      unsubscribeCourses();
+      unsubscribeProblems();
+    };
   }, []);
 
   useEffect(() => {
@@ -187,6 +213,8 @@ export function useLearnFlowData(currentUser) {
       experience: stats.experience || 0,
       pomodoro,
       settings,
+      catalogCourses: state.data.globalCourses || DEFAULT_COURSES,
+      catalogProblems: state.data.globalProblems || DEFAULT_PROBLEMS,
     };
   }, [state]);
 
@@ -371,7 +399,6 @@ export function useLearnFlowData(currentUser) {
 
   return {
     ...value,
-    catalogCourses: COURSES,
     createTaskItem,
     toggleTaskItem,
     deleteTaskItem,
