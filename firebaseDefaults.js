@@ -10,6 +10,7 @@ export function createEmptyUserTree({ email = '', user = null } = {}) {
     profile: {
       displayName,
       email,
+      role: 'user',
       createdAt: now,
       updatedAt: now,
     },
@@ -23,7 +24,6 @@ export function createEmptyUserTree({ email = '', user = null } = {}) {
     submissions: {},
     stats: {
       score: 0,
-      experience: 0,
       streak: 0,
       lessonsWeek: 0,
       activity: EMPTY_ACTIVITY,
